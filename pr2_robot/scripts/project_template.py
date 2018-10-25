@@ -148,3 +148,33 @@ if __name__ == '__main__':
     get_color_list.color_list = []
 
     # TODO: Spin while node is not shutdown
+
+    # ROS node initialization
+    rospy.init_node('perception', anonymous=True)
+
+    # Create Subscribers
+    pcl_sub = rospy.Subscriber('/pr2/world/points', pc2.PointCloud2, pcl_callback, queue_size=1)
+
+    # Create Publishers
+    pcl_objects_pub = rospy.Publisher('/pcl_objects', PointCloud2, queue_size=1)
+    pcl_table_pub = rospy.Publisher('/pcl_table', PointCloud2, queue_size=1)
+    pcl_cluster_pub = rospy.Publisher('/pcl_cluster', PointCloud2, queue_size=1)
+
+    # Create Publishers
+    # TODO: here you need to create two publishers
+    # Call them object_markers_pub and detected_objects_pub
+    # Have them publish to "/object_markers" and "/detected_objects" with
+    # Message Types "Marker" and "DetectedObjectsArray" , respectively
+    object_markers_pub = rospy.Publisher('/object_markers', Marker, queue_size=1)
+    detected_objects_pub = rospy.Publisher('/detected_objects', DetectedObjectsArray, queue_size=1)
+
+    # Load Model From disk
+    model = pickle.load(open('model.sav', 'rb'))
+    clf = model['classifier']
+    encoder = LabelEncoder()
+    encoder.classes_ = model['classes']
+    scaler = model['scaler']
+
+    # Spin while node is not shutdown
+    while not rospy.is_shutdown():
+        rospy.spin()
