@@ -47,19 +47,43 @@ def send_to_yaml(yaml_filename, dict_list):
         yaml.dump(data_dict, outfile, default_flow_style=False)
 
 # Callback function for your Point Cloud Subscriber
-def pcl_callback(pcl_msg):
+def pcl_callback(ros_cloud):
 
-# Exercise-2 TODOs:
+    # Publish original pointcloud
+    original_pub.publish(ros_cloud)
 
-    # TODO: Convert ROS msg to PCL data
-    
-    # TODO: Statistical Outlier Filtering
+    # Convert ROS msg to PCL data
+    pcl_cloud = ros_to_pcl(ros_cloud)
 
-    # TODO: Voxel Grid Downsampling
+    # Statistical Outlier Filtering
+    outlier_filter = pcl_cloud.make_statistical_outlier_filter()
+    outlier_filter.set_mean_k(50)
+    x = 1.0
+    outlier_filter.set_std_dev_mul_thresh(x)
+    cloud_filtered = outlier_filter.filter()
 
-    # TODO: PassThrough Filter
+    # Voxel Grid Downsampling
+    vox = cloud_filtered.make_voxel_grid_filter()
+    leaf_size = 0.01
+    vox.set_leaf_size(leaf_size, leaf_size, leaf_size)
+    cloud_filtered = vox.filter()
 
-    # TODO: RANSAC Plane Segmentation
+    # PassThrough Filter
+    passthrough = cloud_filtered.make_passthrough_filter()
+    filter_axis = 'z'
+    passthrough.set_filter_field_name(filter_axis)
+    axis_min = 0.6
+    axis_max = 1.1
+    passthrough.set_filter_limits(axis_min, axis_max)
+    cloud_filtered = passthrough.filter()
+
+    # RANSAC Plane Segmentation
+    seg = cloud_filtered.make_segmenter()
+    seg.set_model_type(pcl.SACMODEL_PLANE)
+    seg.set_method_type(pcl.SAC_RANSAC)
+    max_distance = 0.01
+    seg.set_distance_threshold(max_distance)
+    inliners, coefficients = seg.segment()
 
     # TODO: Extract inliers and outliers
 
@@ -67,9 +91,11 @@ def pcl_callback(pcl_msg):
 
     # TODO: Create Cluster-Mask Point Cloud to visualize each cluster separately
 
-    # TODO: Convert PCL data to ROS messages
+    # Convert PCL data to ROS messages
+    cloud_filtered_ros = pcl_to_ros(cloud_filtered)
 
-    # TODO: Publish ROS messages
+    # Publish ROS messages
+    filtered_pub.publish(cloud_filtered_ros)
 
 # Exercise-3 TODOs:
 
@@ -90,10 +116,11 @@ def pcl_callback(pcl_msg):
     # Suggested location for where to invoke your pr2_mover() function within pcl_callback()
     # Could add some logic to determine whether or not your object detections are robust
     # before calling pr2_mover()
-    try:
-        pr2_mover(detected_objects_list)
-    except rospy.ROSInterruptException:
-        pass
+
+    # try:
+    #     pr2_mover(detected_objects_list)
+    # except rospy.ROSInterruptException:
+    #     pass
 
 # function to load parameters and request PickPlace service
 def pr2_mover(object_list):
@@ -146,11 +173,13 @@ if __name__ == '__main__':
     pcl_sub = rospy.Subscriber('/pr2/world/points', pc2.PointCloud2, pcl_callback, queue_size=1)
 
     # Create Publishers
-    pcl_objects_pub = rospy.Publisher('/pcl_objects', PointCloud2, queue_size=1)
-    pcl_table_pub = rospy.Publisher('/pcl_table', PointCloud2, queue_size=1)
-    pcl_cluster_pub = rospy.Publisher('/pcl_cluster', PointCloud2, queue_size=1)
-    object_markers_pub = rospy.Publisher('/object_markers', Marker, queue_size=1)
-    detected_objects_pub = rospy.Publisher('/detected_objects', DetectedObjectsArray, queue_size=1)
+    # pcl_objects_pub = rospy.Publisher('/pcl_objects', PointCloud2, queue_size=1)
+    # pcl_table_pub = rospy.Publisher('/pcl_table', PointCloud2, queue_size=1)
+    # pcl_cluster_pub = rospy.Publisher('/pcl_cluster', PointCloud2, queue_size=1)
+    # object_markers_pub = rospy.Publisher('/object_markers', Marker, queue_size=1)
+    # detected_objects_pub = rospy.Publisher('/detected_objects', DetectedObjectsArray, queue_size=1)
+    original_pub = rospy.Publisher('/objects_original', PointCloud2, queue_size=1)
+    filtered_pub = rospy.Publisher('/objects_filtered', PointCloud2, queue_size=1)
 
     # Load Model From disk
     model = pickle.load(open('model.sav', 'rb'))
