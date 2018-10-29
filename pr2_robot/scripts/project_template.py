@@ -60,8 +60,7 @@ def pcl_callback(ros_cloud):
     x = 0.1
     outlier_filter.set_std_dev_mul_thresh(x)
     cloud_filtered = outlier_filter.filter()
-    cloud_filtered_ros = pcl_to_ros(cloud_filtered)
-    filtered_pub.publish(cloud_filtered_ros)
+    filtered_pub.publish(pcl_to_ros(cloud_filtered))
 
     # Voxel Grid Downsampling
     vox = cloud_filtered.make_voxel_grid_filter()
@@ -155,7 +154,7 @@ def pcl_callback(ros_cloud):
         do.cloud = ros_cluster
         detected_objects.append(do)
 
-        # rospy.loginfo('Detected {} objects: {}'.format(len(detected_objects_labels), detected_objects_labels))
+        rospy.loginfo('\n\nDetected {} objects: {}'.format(len(detected_objects_labels), detected_objects_labels))
 
         # Publish the list of detected objects
         detected_objects_pub.publish(detected_objects)
@@ -171,10 +170,14 @@ def pcl_callback(ros_cloud):
     objects_pub.publish(ros_cloud_objects)
     cluster_pub.publish(cluster_cloud_ros)
 
-    try:
-        pr2_mover(detected_objects)
-    except rospy.ROSInterruptException:
-        pass
+    # Check for correct number of detected objects and call mover
+    if (scene_num == 1 and len(detected_objects) == 3 or
+            scene_num == 2 and len(detected_objects) == 5 or
+            scene_num == 3 and len(detected_objects) == 8):
+        try:
+            pr2_mover(detected_objects)
+        except rospy.ROSInterruptException:
+            pass
 
 
 # function to load parameters and request PickPlace service
@@ -191,10 +194,8 @@ def pr2_mover(object_list):
     object_list_param = rospy.get_param('/object_list')
     dropbox_param = rospy.get_param('/dropbox')
 
-    # TODO: Rotate PR2 in place to capture side tables for the collision map
-
     labels = []
-    centroids = []  # to be list of tuples (x, y, z)
+    centroids = []
     for object in object_list:
         labels.append(object.label)
         points_arr = ros_to_pcl(object.cloud).to_array()
@@ -205,7 +206,7 @@ def pr2_mover(object_list):
     for i in range(len(object_list_param)):
 
         # Test score number
-        test_scene_num.data = 1
+        test_scene_num.data = scene_num
 
         # Object name
         object_name.data = object_list_param[i]['name']
@@ -232,21 +233,15 @@ def pr2_mover(object_list):
         # Create a list of dictionaries (made with make_yaml_dict()) for later output to yaml format
         yaml_dict = make_yaml_dict(test_scene_num, arm_name, object_name, pick_pose, place_pose)
         dict_list.append(yaml_dict)
-        send_to_yaml('output_{}.yaml'.format(test_scene_num.data), dict_list)
 
-        # Wait for 'pick_place_routine' service to come up
-        # rospy.wait_for_service('pick_place_routine')
-
-        # Send response
-        # try:
-        #     pick_place_routine = rospy.ServiceProxy('pick_place_routine', PickPlace)
-        #     resp = pick_place_routine(test_scene_num, object_name, arm_name, pick_pose, place_pose)
-        #     print ("Response: ", resp.success)
-        # except rospy.ServiceException, e:
-        #     print "Service call failed: %s"%e
+        # output yaml files
+        send_to_yaml('output_{}.yaml'.format(scene_num), dict_list)
 
 
 if __name__ == '__main__':
+
+    # Set scene number
+    scene_num = 1
 
     # Initialize color_list
     get_color_list.color_list = []
