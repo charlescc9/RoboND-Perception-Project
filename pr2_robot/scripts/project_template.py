@@ -33,7 +33,9 @@ def get_normals(cloud):
 
 # Helper function to create a yaml friendly dictionary from ROS messages
 def make_yaml_dict(test_scene_num, arm_name, object_name, pick_pose, place_pose):
-    yaml_dict = {"test_scene_num": test_scene_num.data, "arm_name": arm_name.data, "object_name": object_name.data,
+    yaml_dict = {"test_scene_num": test_scene_num.data,
+                 "arm_name": arm_name.data,
+                 "object_name": object_name.data,
                  "pick_pose": message_converter.convert_ros_message_to_dictionary(pick_pose),
                  "place_pose": message_converter.convert_ros_message_to_dictionary(place_pose)}
     return yaml_dict
@@ -58,6 +60,8 @@ def pcl_callback(ros_cloud):
     x = 0.1
     outlier_filter.set_std_dev_mul_thresh(x)
     cloud_filtered = outlier_filter.filter()
+    cloud_filtered_ros = pcl_to_ros(cloud_filtered)
+    filtered_pub.publish(cloud_filtered_ros)
 
     # Voxel Grid Downsampling
     vox = cloud_filtered.make_voxel_grid_filter()
@@ -65,12 +69,21 @@ def pcl_callback(ros_cloud):
     vox.set_leaf_size(leaf_size, leaf_size, leaf_size)
     cloud_filtered = vox.filter()
 
-    # PassThrough Filter
+    # PassThrough Filter (z)
     passthrough = cloud_filtered.make_passthrough_filter()
     filter_axis = 'z'
     passthrough.set_filter_field_name(filter_axis)
     axis_min = 0.6
     axis_max = 1.1
+    passthrough.set_filter_limits(axis_min, axis_max)
+    cloud_filtered = passthrough.filter()
+
+    # PassThrough Filter (y)
+    passthrough = cloud_filtered.make_passthrough_filter()
+    filter_axis = 'y'
+    passthrough.set_filter_field_name(filter_axis)
+    axis_min = -0.5
+    axis_max = 0.5
     passthrough.set_filter_limits(axis_min, axis_max)
     cloud_filtered = passthrough.filter()
 
@@ -142,7 +155,7 @@ def pcl_callback(ros_cloud):
         do.cloud = ros_cluster
         detected_objects.append(do)
 
-        rospy.loginfo('Detected {} objects: {}'.format(len(detected_objects_labels), detected_objects_labels))
+        # rospy.loginfo('Detected {} objects: {}'.format(len(detected_objects_labels), detected_objects_labels))
 
         # Publish the list of detected objects
         detected_objects_pub.publish(detected_objects)
@@ -158,10 +171,6 @@ def pcl_callback(ros_cloud):
     objects_pub.publish(ros_cloud_objects)
     cluster_pub.publish(cluster_cloud_ros)
 
-    # Suggested location for where to invoke your pr2_mover() function within pcl_callback()
-    # Could add some logic to determine whether or not your object detections are robust
-    # before calling pr2_mover()
-
     try:
         pr2_mover(detected_objects)
     except rospy.ROSInterruptException:
@@ -172,7 +181,7 @@ def pcl_callback(ros_cloud):
 def pr2_mover(object_list):
 
     # Initialize variables
-    test_score_num = Int32()
+    test_scene_num = Int32()
     object_name = String()
     arm_name = String()
     pick_pose = Pose()
@@ -181,10 +190,6 @@ def pr2_mover(object_list):
     # Get/Read parameters
     object_list_param = rospy.get_param('/object_list')
     dropbox_param = rospy.get_param('/dropbox')
-
-    # Parse parameters into individual variables
-    # object_list_param_dict = {o.name: o.group for o in object_list_param}
-    dropbox_param_dict = {db.group: db.position for db in dropbox_param}
 
     # TODO: Rotate PR2 in place to capture side tables for the collision map
 
@@ -196,13 +201,17 @@ def pr2_mover(object_list):
         centroids.append([np.asscalar(x) for x in np.mean(points_arr, axis=0)[:3]])
 
     # Loop through the pick list
+    dict_list = []
     for i in range(len(object_list_param)):
+
+        # Test score number
+        test_scene_num.data = 1
 
         # Object name
         object_name.data = object_list_param[i]['name']
 
         # Arm name
-        arm_name.data = object_list_param[i]['group']
+        arm_name.data = 'right' if object_list_param[i]['group'] == 'green' else 'left'
 
         # Pick pose
         for j in range(len(labels)):
@@ -210,30 +219,31 @@ def pr2_mover(object_list):
                 pick_pose.position.x = centroids[i][0]
                 pick_pose.position.y = centroids[i][1]
                 pick_pose.position.z = centroids[i][2]
+                break
 
         # Place pose
-        place_pose.position.x = dropbox_param_dict[object_list_param_dict[o.labels]][0]
-        place_pose.position.y = dropbox_param_dict[object_list_param_dict[o.labels]][1]
-        place_pose.position.z = dropbox_param_dict[object_list_param_dict[o.labels]][2]
+        for j in range(len(dropbox_param)):
+            if dropbox_param[j]['group'] == object_list_param[i]['group']:
+                place_position = dropbox_param[j]['position']
+                place_pose.position.x = place_position[0]
+                place_pose.position.y = place_position[1]
+                place_pose.position.z = place_position[2]
 
         # Create a list of dictionaries (made with make_yaml_dict()) for later output to yaml format
-        yaml_dict = make_yaml_dict(test_score_num, arm_name, object_name, pick_pose, place_pose)
+        yaml_dict = make_yaml_dict(test_scene_num, arm_name, object_name, pick_pose, place_pose)
+        dict_list.append(yaml_dict)
+        send_to_yaml('output_{}.yaml'.format(test_scene_num.data), dict_list)
 
         # Wait for 'pick_place_routine' service to come up
-        rospy.wait_for_service('pick_place_routine')
+        # rospy.wait_for_service('pick_place_routine')
 
-        try:
-            pick_place_routine = rospy.ServiceProxy('pick_place_routine', PickPlace)
-
-            # TODO: Insert your message variables to be sent as a service request
-            resp = pick_place_routine(TEST_SCENE_NUM, OBJECT_NAME, WHICH_ARM, PICK_POSE, PLACE_POSE)
-
-            print ("Response: ",resp.success)
-
-        except rospy.ServiceException, e:
-            print "Service call failed: %s"%e
-
-    # TODO: Output your request parameters into output yaml file
+        # Send response
+        # try:
+        #     pick_place_routine = rospy.ServiceProxy('pick_place_routine', PickPlace)
+        #     resp = pick_place_routine(test_scene_num, object_name, arm_name, pick_pose, place_pose)
+        #     print ("Response: ", resp.success)
+        # except rospy.ServiceException, e:
+        #     print "Service call failed: %s"%e
 
 
 if __name__ == '__main__':
@@ -248,15 +258,14 @@ if __name__ == '__main__':
     pcl_sub = rospy.Subscriber('/pr2/world/points', pc2.PointCloud2, pcl_callback, queue_size=1)
 
     # Create Publishers
+    filtered_pub = rospy.Publisher('/filtered', PointCloud2, queue_size=1)
     cluster_pub = rospy.Publisher('/clusters', PointCloud2, queue_size=1)
     objects_pub = rospy.Publisher('/objects', PointCloud2, queue_size=1)
     object_markers_pub = rospy.Publisher('/object_markers', Marker, queue_size=1)
     detected_objects_pub = rospy.Publisher('/detected_objects', DetectedObjectsArray, queue_size=1)
 
     # Load Model From disk
-    model = pickle.load(open('model1.sav', 'rb'))
-    # model = pickle.load(open('model2.sav', 'rb'))
-    # model = pickle.load(open('model3.sav', 'rb'))
+    model = pickle.load(open('model3.sav', 'rb'))
     clf = model['classifier']
     encoder = LabelEncoder()
     encoder.classes_ = model['classes']
