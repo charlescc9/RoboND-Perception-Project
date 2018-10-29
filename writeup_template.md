@@ -27,20 +27,52 @@ You're reading it!
 
 ### Exercise 1, 2 and 3 pipeline implemented
 #### 1. Complete Exercise 1 steps. Pipeline for filtering and RANSAC plane fitting implemented.
+In this project, I wrote code that recognized objects from a pointcloud (pr2_robot/scripts/project_template.py). 
+For the first part of the project, I performed filtering and segmentation on the pointcloud in order to accurately
+isolate the objects. After converting the ROS pointcloud into PCL pointcloud datatype, I used PCL to firstly perform
+statistical outlier filtering, which removed irrelevant noise. This can be seen by comparing the original and filtered
+pointclouds:
+
+![original](rviz_original.png)
+![filtered](rviz_filtered.png)
+
+Next I performed voxel grid downsampling to downsample the pointcloud, improving computational efficiency for the later
+clustering and detection steps. Next I performed passthrough filtering to isolate the table from the rest of the 
+image. I filtered first on the z axis to remove the table leg, and then on the x axis to remove part of the dropboxes
+that were present in the image. Finally, I used RANSAC segmentation to separate the table from the objects.
+After downsampling and segmentation, the pointcloud only contained the objects of interest:
+
+![segmented](rviz_segmented.png)
 
 #### 2. Complete Exercise 2 steps: Pipeline including clustering for segmentation implemented.  
+In the second part of the project, I used clustering techniques to isolate individual objects from each other. This was
+accomplished via PCL's Euclidean clustering functionality with a k-d tree to extract clusters of points close together
+in space. Afterwards, each cluster was assigned an arbitrary color and the pointcloud appeared as:
 
-#### 2. Complete Exercise 3 Steps.  Features extracted and SVM trained.  Object recognition implemented.
-Here is an example of how to include an image in your writeup.
+![clustered](rviz_clustered.png)
 
-![demo-1](https://user-images.githubusercontent.com/20687560/28748231-46b5b912-7467-11e7-8778-3095172b7b19.png)
+#### 3. Complete Exercise 3 Steps.  Features extracted and SVM trained.  Object recognition implemented.
+In the final part of the perception pipeline, I used the individual objects, now isolated into different clusters, to
+recognition which object they were based on the attributes of known objects. To do this, I first extracted color and 
+normal histrogram features from 100 random orientations of each object (pr2_robot/scripts/capture_features.py). 
+I then used these features to train an SVM classifier using sklearn (pr2_robot/scripts/train_svm.py). Finally, I used
+the resultant model.sav files to perform real time classification of the clustered objects from the pointcloud, 
+ultimately labeling each cluster.
+  
 
 ### Pick and Place Setup
 
 #### 1. For all three tabletop setups (`test*.world`), perform object recognition, then read in respective pick list (`pick_list_*.yaml`). Next construct the messages that would comprise a valid `PickPlace` request output them to `.yaml` format.
 
-And here's another image! 
-![demo-2](https://user-images.githubusercontent.com/20687560/28748286-9f65680e-7468-11e7-83dc-f1a32380b89c.png)
+In this part of the project, I situated my filtering, clustering, and recognition code with a ROS node in order to
+perform real time 3D object recognition. I create a `perception` ROS node that subscribed to the pointcloud topic of 
+the PR2 RGBD camera. Within the subscriber callback, `pcl_callback` I added all the abovementioned code, which ultimately generated
+a list of recognized objects with labels and corresponding pointclouds. I passed this list into a separate function,
+`pr2_mover()`, which first parsed the list of known objects for the given world, and then compared each object in that 
+pick list to the recognized object. Once a match was found, the centroid of the object was computed and bundled with
+other metadata including the label, dropbox place position. Finally, all this data was written out to a yaml file.
+
+This process worked quite well...
 
 Spend some time at the end to discuss your code, what techniques you used, what worked and why, where the implementation might fail and how you might improve it if you were going to pursue this project further.  
 
