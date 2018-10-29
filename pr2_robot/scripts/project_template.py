@@ -182,34 +182,42 @@ def pr2_mover(object_list):
     object_list_param = rospy.get_param('/object_list')
     dropbox_param = rospy.get_param('/dropbox')
 
-    # TODO: Parse parameters into individual variables
-    object_list_param_dict = {o.name: o.group for o in object_list_param}
+    # Parse parameters into individual variables
+    # object_list_param_dict = {o.name: o.group for o in object_list_param}
     dropbox_param_dict = {db.group: db.position for db in dropbox_param}
 
     # TODO: Rotate PR2 in place to capture side tables for the collision map
 
-    # TODO: Loop through the pick list
+    labels = []
+    centroids = []  # to be list of tuples (x, y, z)
     for object in object_list:
+        labels.append(object.label)
+        points_arr = ros_to_pcl(object.cloud).to_array()
+        centroids.append([np.asscalar(x) for x in np.mean(points_arr, axis=0)[:3]])
+
+    # Loop through the pick list
+    for i in range(len(object_list_param)):
 
         # Object name
+        object_name.data = object_list_param[i]['name']
 
         # Arm name
-        arm_name.data = object_list_param_dict[object.labels]
+        arm_name.data = object_list_param[i]['group']
 
         # Pick pose
-        centriod = np.asscalar(np.mean(ros_to_pcl(object.cloud).to_array(), 0)[:3])
-        pick_pose.position.x = centriod[0]
-        pick_pose.position.y = centriod[1]
-        pick_pose.position.z = centriod[2]
+        for j in range(len(labels)):
+            if labels[j] == object_list_param[i]['name']:
+                pick_pose.position.x = centroids[i][0]
+                pick_pose.position.y = centroids[i][1]
+                pick_pose.position.z = centroids[i][2]
 
         # Place pose
-        place_pose.position.x = dropbox_param_dict[object_list_param_dict[object.labels]][0]
-        place_pose.position.y = dropbox_param_dict[object_list_param_dict[object.labels]][1]
-        place_pose.position.z = dropbox_param_dict[object_list_param_dict[object.labels]][2]
+        place_pose.position.x = dropbox_param_dict[object_list_param_dict[o.labels]][0]
+        place_pose.position.y = dropbox_param_dict[object_list_param_dict[o.labels]][1]
+        place_pose.position.z = dropbox_param_dict[object_list_param_dict[o.labels]][2]
 
-
-        # TODO: Create a list of dictionaries (made with make_yaml_dict()) for later output to yaml format
-        yaml_dict = make_yaml_dict(test_score_num, arm_name, object.label, pick_pose, place_pose)
+        # Create a list of dictionaries (made with make_yaml_dict()) for later output to yaml format
+        yaml_dict = make_yaml_dict(test_score_num, arm_name, object_name, pick_pose, place_pose)
 
         # Wait for 'pick_place_routine' service to come up
         rospy.wait_for_service('pick_place_routine')
