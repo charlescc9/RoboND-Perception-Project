@@ -30,9 +30,9 @@ in 3D space. Afterwards, each cluster was assigned an arbitrary color and the po
 In the third part of the perception pipeline, I performed object recognition on the isolated object clusters using known
 objects. To do this, I first extracted color and normal histrogram features from 100 random orientations of each known object
 (pr2_robot/scripts/capture_features.py and pr2_robot/scripts/features.py).
-I then used these features to train an SVM classifier using sklearn's SCV with an rbf kernel (pr2_robot/scripts/train_svm.py). Finally, I used
+I then used these features to train an SVM classifier using sklearn's SCV class with an rbf kernel (pr2_robot/scripts/train_svm.py). Finally, I used
 the resultant model.sav files to perform real time classification of the clustered objects from the pointcloud, 
-ultimately labeling each cluster. The confusion matrix for each world's can be seen here:
+ultimately labeling each cluster. The confusion matrix for each world can be seen here:
 
 ![confusion_matrices](confusion_matrices.png)
 
