@@ -2,7 +2,7 @@
 
 ### Exercise 1, 2 and 3 pipeline implemented
 #### 1. Complete Exercise 1 steps. Pipeline for filtering and RANSAC plane fitting implemented.
-In this project, I implemented a 3D perception pipeline uses ROS pointcloud data to perform object recognition (pr2_robot/scripts/project_template.py).
+In this project, I implemented a 3D perception pipeline that uses ROS pointcloud data to perform object recognition (pr2_robot/scripts/project_template.py).
 For the first part of the project, I performed filtering and segmentation on the pointcloud in order to accurately
 isolate the objects from the rest of the pointcloud. After converting the ROS pointcloud into PCL format, I first performed
 statistical outlier filtering, which removed irrelevant noise. This can be seen by comparing the original and filtered
