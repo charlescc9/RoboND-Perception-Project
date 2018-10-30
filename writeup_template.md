@@ -13,7 +13,7 @@ pointclouds:
 
 Next I performed voxel grid downsampling to reduce the total number of points in the the pointcloud, improving computational efficiency for the later
 clustering and detection steps. Next I performed passthrough filtering to isolate the table from the rest of the 
-image. I filtered first on the z axis to remove the table leg, and then on the x axis to remove parts of the dropboxes
+image. I filtered first on the z axis to remove the table leg, and then on the y axis to remove parts of the dropboxes
 that were present in the image. Finally, I used RANSAC segmentation to separate the table from the objects.
 After downsampling and segmentation, the pointcloud only contained the objects of interest:
 
@@ -30,7 +30,7 @@ in 3D space. Afterwards, each cluster was assigned an arbitrary color and the po
 In the third part of the perception pipeline, I performed object recognition on the isolated object clusters using known
 objects. To do this, I first extracted color and 
 normal histrogram features from 100 random orientations of each known object (pr2_robot/scripts/capture_features.py). 
-I then used these features to train an SVM classifier using sklearn (pr2_robot/scripts/train_svm.py). Finally, I used
+I then used these features to train an SVM classifier using sklearn's SCV with an rbf kernel (pr2_robot/scripts/train_svm.py). Finally, I used
 the resultant model.sav files to perform real time classification of the clustered objects from the pointcloud, 
 ultimately labeling each cluster.
   

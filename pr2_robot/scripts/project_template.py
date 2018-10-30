@@ -94,7 +94,7 @@ def pcl_callback(ros_cloud):
     seg.set_distance_threshold(max_distance)
     inliners, coefficients = seg.segment()
 
-    # Extract inliers and outliers
+    # Extract objects
     cloud_objects = cloud_filtered.extract(inliners, negative=True)
 
     # Convert PCL data to ROS messages
@@ -125,7 +125,6 @@ def pcl_callback(ros_cloud):
                                              white_cloud[index][1],
                                              white_cloud[index][2],
                                              rgb_to_float(cluster_color[j])])
-
         pcl_cluster = cloud_objects.extract(indices)
 
         # Convert the cluster from pcl to ROS using helper function
@@ -153,8 +152,6 @@ def pcl_callback(ros_cloud):
         do.label = label
         do.cloud = ros_cluster
         detected_objects.append(do)
-
-        rospy.loginfo('\n\nDetected {} objects: {}'.format(len(detected_objects_labels), detected_objects_labels))
 
         # Publish the list of detected objects
         detected_objects_pub.publish(detected_objects)
@@ -194,6 +191,7 @@ def pr2_mover(object_list):
     object_list_param = rospy.get_param('/object_list')
     dropbox_param = rospy.get_param('/dropbox')
 
+    # Get object labels and centroids
     labels = []
     centroids = []
     for object in object_list:
